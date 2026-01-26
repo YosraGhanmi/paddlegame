@@ -1,0 +1,581 @@
+'use client';
+
+import React, { useState, useRef, useEffect } from 'react';
+
+type GameState = 'menu' | 'game' | 'end';
+type Difficulty = 'easy' | 'intermediate' | 'hard';
+
+interface Target {
+  id: number;
+  x: number;
+  y: number;
+  radius: number;
+  size: 'small' | 'large';
+  velocity?: number;
+  direction?: number;
+}
+
+interface Feedback {
+  x: number;
+  y: number;
+  text: string;
+  points: number;
+  opacity: number;
+}
+
+interface GameStats {
+  finalScore: number;
+  perfectHits: number;
+  totalHits: number;
+}
+
+const PaddleGame: React.FC = () => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const animationRef = useRef<number>();
+  const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
+
+  // Game State
+  const [gameState, setGameState] = useState<GameState>('menu');
+  const [difficulty, setDifficulty] = useState<Difficulty>('easy');
+  const [gameStats, setGameStats] = useState<GameStats | null>(null);
+
+  // Game Variables
+  const gameRef = useRef({
+    score: 0,
+    timeLeft: 60,
+    targets: [] as Target[],
+    feedback: [] as Feedback[],
+    nextTargetId: 0,
+    perfectHits: 0,
+    totalHits: 0,
+    mousePos: { x: 0, y: 0 },
+  });
+
+  const CANVAS_WIDTH = canvasSize.width || window.innerWidth;
+  const CANVAS_HEIGHT = canvasSize.height || window.innerHeight;
+  const TARGET_AREA_TOP = 40;
+  const TARGET_AREA_BOTTOM = CANVAS_HEIGHT * 0.4;
+  const TARGET_SPAWN_Y = CANVAS_HEIGHT * 0.25;
+  const NET_Y = CANVAS_HEIGHT * 0.52;
+  const NET_HEIGHT = CANVAS_HEIGHT - NET_Y;
+
+  // Set canvas size on mount
+  useEffect(() => {
+    setCanvasSize({ width: window.innerWidth, height: window.innerHeight });
+
+    const handleResize = () => {
+      setCanvasSize({ width: window.innerWidth, height: window.innerHeight });
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Initialize game
+  const initializeGame = (selectedDifficulty: Difficulty) => {
+    setDifficulty(selectedDifficulty);
+    gameRef.current = {
+      score: 0,
+      timeLeft: 60,
+      targets: [],
+      feedback: [],
+      nextTargetId: 0,
+      perfectHits: 0,
+      totalHits: 0,
+      mousePos: { x: 0, y: 0 },
+    };
+
+    // Create initial targets
+    addNewTarget();
+    addNewTarget();
+
+    setGameState('game');
+  };
+
+  // Add new target
+  const addNewTarget = () => {
+    let x, radius, size;
+    let validPosition = false;
+
+    while (!validPosition) {
+      size = difficulty === 'easy' ? 'large' : Math.random() > 0.5 ? 'large' : 'small';
+      radius = size === 'large' ? 105 : 75; // 3x larger: was 35 and 25
+
+      // Spawn targets horizontally across the top area, all at same Y level
+      x = Math.random() * (CANVAS_WIDTH - radius * 2) + radius;
+
+      // Check if not overlapping with existing targets
+      validPosition = true;
+      for (const target of gameRef.current.targets) {
+        const distance = Math.sqrt((x - target.x) ** 2);
+        if (distance < radius + target.radius + 80) {
+          validPosition = false;
+          break;
+        }
+      }
+    }
+
+    const velocity = difficulty === 'hard' ? Math.random() * 1.5 + 0.5 : 0;
+    const direction = Math.random() > 0.5 ? 1 : -1;
+
+    gameRef.current.targets.push({
+      id: gameRef.current.nextTargetId++,
+      x,
+      y: TARGET_SPAWN_Y,
+      radius,
+      size,
+      velocity,
+      direction,
+    });
+  };
+
+  // Calculate points based on distance from center
+  const calculatePoints = (distance: number, radius: number) => {
+    const accuracy = 1 - distance / radius;
+
+    if (accuracy > 0.85) {
+      return { points: 100, feedback: 'PERFECT' };
+    } else if (accuracy > 0.6) {
+      return { points: 50, feedback: '+50' };
+    } else {
+      return { points: 20, feedback: '+20' };
+    }
+  };
+
+  // Handle canvas click
+  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (gameState !== 'game') return;
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const clickY = e.clientY - rect.top;
+
+    // Check if clicked in net area (penalty zone)
+    if (clickY > NET_Y) {
+      gameRef.current.feedback.push({
+        x: clickX,
+        y: clickY,
+        text: 'MISS',
+        points: 0,
+        opacity: 1,
+      });
+      gameRef.current.score = Math.max(0, gameRef.current.score - 10);
+      return;
+    }
+
+    // Check targets
+    let hitTarget: Target | null = null;
+    for (let i = gameRef.current.targets.length - 1; i >= 0; i--) {
+      const target = gameRef.current.targets[i];
+      const distance = Math.sqrt((clickX - target.x) ** 2 + (clickY - target.y) ** 2);
+
+      if (distance <= target.radius) {
+        hitTarget = target;
+        const { points, feedback } = calculatePoints(distance, target.radius);
+
+        gameRef.current.score += points;
+        gameRef.current.totalHits++;
+        if (feedback === 'PERFECT') {
+          gameRef.current.perfectHits++;
+        }
+
+        gameRef.current.feedback.push({
+          x: target.x,
+          y: target.y,
+          text: feedback,
+          points,
+          opacity: 1,
+        });
+
+        gameRef.current.targets.splice(i, 1);
+        addNewTarget();
+        break;
+      }
+    }
+  };
+
+  // Handle mouse move for cursor feedback
+  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    gameRef.current.mousePos = { x, y };
+    canvas.style.cursor = 'crosshair';
+  };
+
+  // Draw function
+  const draw = (ctx: CanvasRenderingContext2D) => {
+    // Draw dark background
+    ctx.fillStyle = '#0a0f1f';
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+    // Draw target area background (subtle gradient)
+    const targetAreaGradient = ctx.createLinearGradient(0, TARGET_AREA_TOP, 0, NET_Y);
+    targetAreaGradient.addColorStop(0, '#0f1a2e');
+    targetAreaGradient.addColorStop(1, '#0a0f1f');
+    ctx.fillStyle = targetAreaGradient;
+    ctx.fillRect(0, TARGET_AREA_TOP, CANVAS_WIDTH, NET_Y - TARGET_AREA_TOP);
+
+    // Draw massive net area with dense grid
+    const netGradient = ctx.createLinearGradient(0, NET_Y, 0, CANVAS_HEIGHT);
+    netGradient.addColorStop(0, '#1a1a3e');
+    netGradient.addColorStop(0.3, '#2a2a5e');
+    netGradient.addColorStop(0.7, '#1a1a3e');
+    netGradient.addColorStop(1, '#0a0a1f');
+    ctx.fillStyle = netGradient;
+    ctx.fillRect(0, NET_Y, CANVAS_WIDTH, NET_HEIGHT);
+
+    // Dense net grid pattern (very fine grid)
+    ctx.strokeStyle = 'rgba(100, 150, 255, 0.4)';
+    ctx.lineWidth = 1;
+    for (let x = 0; x < CANVAS_WIDTH; x += 12) {
+      ctx.beginPath();
+      ctx.moveTo(x, NET_Y);
+      ctx.lineTo(x, CANVAS_HEIGHT);
+      ctx.stroke();
+    }
+
+    for (let y = NET_Y; y < CANVAS_HEIGHT; y += 12) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(CANVAS_WIDTH, y);
+      ctx.stroke();
+    }
+
+    // Net top edge highlight with glow
+    ctx.strokeStyle = 'rgba(150, 200, 255, 0.8)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(0, NET_Y);
+    ctx.lineTo(CANVAS_WIDTH, NET_Y);
+    ctx.stroke();
+
+    // Net glow effect
+    const netGlowGradient = ctx.createLinearGradient(0, NET_Y, 0, NET_Y + 100);
+    netGlowGradient.addColorStop(0, 'rgba(100, 150, 255, 0.2)');
+    netGlowGradient.addColorStop(1, 'rgba(100, 150, 255, 0)');
+    ctx.fillStyle = netGlowGradient;
+    ctx.fillRect(0, NET_Y, CANVAS_WIDTH, 100);
+
+    // Draw targets
+    const time = Date.now() / 1000;
+    for (const target of gameRef.current.targets) {
+      // Update target position if moving (hard mode)
+      if (target.velocity && target.velocity > 0) {
+        target.x += target.direction! * target.velocity;
+        if (target.x - target.radius < 0) {
+          target.direction = 1;
+        } else if (target.x + target.radius > CANVAS_WIDTH) {
+          target.direction = -1;
+        }
+      }
+
+      // Very large outer glow
+      const glowGradient = ctx.createRadialGradient(
+        target.x,
+        target.y,
+        0,
+        target.x,
+        target.y,
+        target.radius * 2.2
+      );
+      glowGradient.addColorStop(0, 'rgba(100, 220, 255, 0.4)');
+      glowGradient.addColorStop(0.5, 'rgba(100, 220, 255, 0.15)');
+      glowGradient.addColorStop(1, 'rgba(100, 220, 255, 0)');
+      ctx.fillStyle = glowGradient;
+      ctx.beginPath();
+      ctx.arc(target.x, target.y, target.radius * 2.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Outer ring 1 - thick bright cyan
+      ctx.strokeStyle = 'rgba(100, 220, 255, 0.95)';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(target.x, target.y, target.radius, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Outer ring 2
+      ctx.strokeStyle = 'rgba(100, 220, 255, 0.6)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(target.x, target.y, target.radius * 0.65, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Inner ring 3
+      ctx.strokeStyle = 'rgba(100, 220, 255, 0.7)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(target.x, target.y, target.radius * 0.35, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Bright center zone
+      const centerGradient = ctx.createRadialGradient(
+        target.x,
+        target.y,
+        0,
+        target.x,
+        target.y,
+        target.radius * 0.28
+      );
+      centerGradient.addColorStop(0, '#ffffff');
+      centerGradient.addColorStop(1, 'rgba(150, 230, 255, 1)');
+      ctx.fillStyle = centerGradient;
+      ctx.beginPath();
+      ctx.arc(target.x, target.y, target.radius * 0.28, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Pulsing outermost ring animation
+      const pulse = 0.4 + Math.sin(time * 3) * 0.4;
+      ctx.strokeStyle = `rgba(100, 220, 255, ${pulse * 0.9})`;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(target.x, target.y, target.radius + 12, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // Draw feedback text with glow
+    for (let i = gameRef.current.feedback.length - 1; i >= 0; i--) {
+      const fb = gameRef.current.feedback[i];
+      fb.opacity -= 0.02;
+
+      if (fb.opacity <= 0) {
+        gameRef.current.feedback.splice(i, 1);
+        continue;
+      }
+
+      ctx.globalAlpha = fb.opacity;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      if (fb.text === 'PERFECT') {
+        ctx.fillStyle = '#00ffff';
+        ctx.font = 'bold 48px "Courier New", monospace';
+        ctx.shadowColor = '#00ffff';
+        ctx.shadowBlur = 20;
+      } else if (fb.text.startsWith('+')) {
+        ctx.fillStyle = '#00ff88';
+        ctx.font = 'bold 32px "Courier New", monospace';
+        ctx.shadowColor = '#00ff88';
+        ctx.shadowBlur = 15;
+      } else {
+        ctx.fillStyle = '#ff4444';
+        ctx.font = 'bold 24px "Courier New", monospace';
+        ctx.shadowColor = '#ff4444';
+        ctx.shadowBlur = 10;
+      }
+
+      ctx.fillText(fb.text, fb.x, fb.y - fb.opacity * 40);
+      ctx.shadowColor = 'transparent';
+    }
+
+    ctx.globalAlpha = 1;
+  };
+
+  // Game loop
+  const [, setRender] = useState(0);
+
+  useEffect(() => {
+    if (gameState !== 'game') return;
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const startTime = Date.now();
+
+    const gameLoop = () => {
+      const elapsed = (Date.now() - startTime) / 1000;
+      gameRef.current.timeLeft = Math.max(0, 60 - elapsed);
+
+      // Move targets for hard difficulty
+      if (difficulty === 'hard') {
+        const time = Date.now() / 1000;
+        for (const target of gameRef.current.targets) {
+          const baseX = target.x;
+          target.x += Math.sin(time * 2) * 2;
+          target.x = Math.max(target.radius, Math.min(CANVAS_WIDTH - target.radius, target.x));
+        }
+      }
+
+      draw(ctx);
+      // Force React to re-render HUD
+      setRender(prev => prev + 1);
+
+      if (gameRef.current.timeLeft > 0) {
+        animationRef.current = requestAnimationFrame(gameLoop);
+      } else {
+        const stats: GameStats = {
+          finalScore: gameRef.current.score,
+          perfectHits: gameRef.current.perfectHits,
+          totalHits: gameRef.current.totalHits,
+        };
+        setGameStats(stats);
+        setGameState('end');
+      }
+    };
+
+    animationRef.current = requestAnimationFrame(gameLoop);
+
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+    };
+  }, [gameState, difficulty]);
+
+  // Render menu screen
+  const renderMenu = () => (
+    <div className="fixed inset-0 flex items-center justify-center bg-slate-950 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(100,200,255,0.1),rgba(100,200,255,0))]">
+      <div className="text-center max-w-md w-full mx-4">
+        <h1 className="text-6xl font-bold text-cyan-400 mb-1 font-mono tracking-widest">
+          PADEL
+        </h1>
+        <p className="text-cyan-300/60 text-sm mb-4 font-mono tracking-wider">TRAINING SIMULATOR</p>
+
+        <div className="bg-gradient-to-b from-slate-900 to-slate-950 rounded-lg p-8 border border-cyan-500/50 backdrop-blur mb-6">
+          <p className="text-cyan-300/80 text-xs mb-6 font-mono">SELECT DIFFICULTY</p>
+
+          <div className="space-y-3">
+            <button
+              onClick={() => initializeGame('easy')}
+              className="w-full bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-slate-950 font-bold py-3 px-6 rounded transition-all text-sm uppercase tracking-wider font-mono shadow-lg shadow-cyan-500/20"
+            >
+              Easy
+            </button>
+            <button
+              onClick={() => initializeGame('intermediate')}
+              className="w-full bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-slate-950 font-bold py-3 px-6 rounded transition-all text-sm uppercase tracking-wider font-mono shadow-lg shadow-blue-500/20"
+            >
+              Intermediate
+            </button>
+            <button
+              onClick={() => initializeGame('hard')}
+              className="w-full bg-gradient-to-r from-purple-600 to-blue-500 hover:from-purple-500 hover:to-blue-400 text-slate-950 font-bold py-3 px-6 rounded transition-all text-sm uppercase tracking-wider font-mono shadow-lg shadow-purple-500/20"
+            >
+              Hard
+            </button>
+          </div>
+        </div>
+
+        <p className="text-cyan-300/40 text-xs font-mono tracking-wider">60 SECOND SESSION</p>
+      </div>
+    </div>
+  );
+
+  // Render game screen
+  const renderGame = () => (
+    <div className="fixed inset-0 bg-slate-950 overflow-hidden">
+      {/* Canvas with minimal HUD */}
+      <div className="w-screen h-screen relative">
+        <canvas
+          ref={canvasRef}
+          width={CANVAS_WIDTH}
+          height={CANVAS_HEIGHT}
+          onClick={handleCanvasClick}
+          onMouseMove={handleMouseMove}
+          className="absolute inset-0 w-full h-full"
+        />
+
+        {/* HUD overlay on canvas */}
+        <div className="absolute top-6 left-8 text-cyan-400 font-mono pointer-events-none">
+          <div className="text-xs opacity-60">MODE</div>
+          <div className="text-xl font-bold">
+            {difficulty === 'easy' ? 'EASY' : difficulty === 'intermediate' ? 'INTER' : 'HARD'}
+          </div>
+        </div>
+
+        <div className="absolute top-6 left-1/2 -translate-x-1/2 text-cyan-400 font-mono text-center pointer-events-none">
+          <div className="text-xs opacity-60 mb-1">TIME</div>
+          <div className="text-4xl font-bold tabular-nums">
+            {Math.floor(gameRef.current.timeLeft / 60)
+              .toString()
+              .padStart(2, '0')}
+            :
+            {Math.floor(gameRef.current.timeLeft % 60)
+              .toString()
+              .padStart(2, '0')}
+          </div>
+        </div>
+
+        <div className="absolute top-6 right-8 text-cyan-400 font-mono text-right pointer-events-none">
+          <div className="text-xs opacity-60">SCORE</div>
+          <div className="text-4xl font-bold tabular-nums">{gameRef.current.score.toString().padStart(5, '0')}</div>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Render end screen
+  const renderEnd = () => {
+    if (!gameStats) return null;
+
+    const percentage =
+      gameStats.totalHits > 0
+        ? Math.round((gameStats.perfectHits / gameStats.totalHits) * 100)
+        : 0;
+
+    return (
+      <div className="fixed inset-0 flex items-center justify-center bg-slate-950 bg-opacity-90">
+        <div className="bg-gradient-to-b from-slate-900 to-slate-950 rounded-lg p-12 max-w-md w-full mx-4 shadow-2xl text-center border border-cyan-500/50">
+          <h1 className="text-5xl font-bold text-cyan-400 mb-2 font-mono tracking-wider">
+            SESSION END
+          </h1>
+          <p className="text-cyan-300/60 text-sm mb-10 font-mono">MATCH RESULTS</p>
+          <div className="space-y-6 mb-10">
+            <div className="bg-slate-800/50 rounded-lg p-6 border border-cyan-500/30 backdrop-blur">
+              <p className="text-cyan-300/60 text-xs mb-2 font-mono tracking-widest">SCORE</p>
+              <p className="text-5xl font-bold text-cyan-400 font-mono tabular-nums">
+                {gameStats.finalScore.toString().padStart(5, '0')}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-slate-800/50 rounded-lg p-6 border border-cyan-500/30 backdrop-blur">
+                <p className="text-cyan-300/60 text-xs mb-2 font-mono tracking-widest">PERFECT</p>
+                <p className="text-3xl font-bold text-cyan-400 font-mono">
+                  {gameStats.perfectHits}/{gameStats.totalHits}
+                </p>
+              </div>
+              <div className="bg-slate-800/50 rounded-lg p-6 border border-cyan-500/30 backdrop-blur">
+                <p className="text-cyan-300/60 text-xs mb-2 font-mono tracking-widest">ACCURACY</p>
+                <p className="text-3xl font-bold text-cyan-400 font-mono">{percentage}%</p>
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-col gap-3">
+            <button
+              onClick={() => initializeGame(difficulty)}
+              className="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold py-3 px-8 rounded transition-all text-sm uppercase tracking-wider font-mono"
+            >
+              Play Again
+            </button>
+            <button
+              onClick={() => setGameState('menu')}
+              className="bg-slate-700 hover:bg-slate-600 text-cyan-400 font-bold py-3 px-8 rounded transition-all text-sm uppercase tracking-wider font-mono border border-cyan-500/30"
+            >
+              Back to Menu
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="w-full h-screen bg-slate-900">
+      {gameState === 'menu' && renderMenu()}
+      {gameState === 'game' && renderGame()}
+      {gameState === 'end' && renderEnd()}
+    </div>
+  );
+};
+
+export default PaddleGame;
