@@ -51,12 +51,12 @@ const PaddleGame: React.FC = () => {
     mousePos: { x: 0, y: 0 },
   });
 
-  const CANVAS_WIDTH = canvasSize.width || window.innerWidth;
-  const CANVAS_HEIGHT = canvasSize.height || window.innerHeight;
+  const CANVAS_WIDTH = canvasSize.width ;
+  const CANVAS_HEIGHT = canvasSize.height ;
   const TARGET_AREA_TOP = 40;
   const TARGET_AREA_BOTTOM = CANVAS_HEIGHT * 0.4;
-  const TARGET_SPAWN_Y = CANVAS_HEIGHT * 0.25;
-  const NET_Y = CANVAS_HEIGHT * 0.52;
+  const TARGET_SPAWN_Y = CANVAS_HEIGHT * 0.4;
+  const NET_Y = CANVAS_HEIGHT * 0.65;
   const NET_HEIGHT = CANVAS_HEIGHT - NET_Y;
 
   // Set canvas size on mount
@@ -84,6 +84,11 @@ const PaddleGame: React.FC = () => {
       totalHits: 0,
       mousePos: { x: 0, y: 0 },
     };
+   // if (typeof document !== 'undefined' && document.documentElement.requestFullscreen) {
+     //   document.documentElement.requestFullscreen().catch(() => {
+          // Fullscreen request failed, continue without fullscreen
+       // })
+      //}
 
     // Create initial targets
     addNewTarget();
@@ -99,7 +104,7 @@ const PaddleGame: React.FC = () => {
 
     while (!validPosition) {
       size = difficulty === 'easy' ? 'large' : Math.random() > 0.5 ? 'large' : 'small';
-      radius = size === 'large' ? 105 : 75; // 3x larger: was 35 and 25
+      radius = size === 'large' ? 190 : 130; // 2x bigger from previous
 
       // Spawn targets horizontally across the top area, all at same Y level
       x = Math.random() * (CANVAS_WIDTH - radius * 2) + radius;
@@ -136,6 +141,8 @@ const PaddleGame: React.FC = () => {
     if (accuracy > 0.85) {
       return { points: 100, feedback: 'PERFECT' };
     } else if (accuracy > 0.6) {
+      return { points: 75, feedback: '+75' };
+    } else if (accuracy > 0.4) {
       return { points: 50, feedback: '+50' };
     } else {
       return { points: 20, feedback: '+20' };
