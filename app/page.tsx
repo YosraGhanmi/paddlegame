@@ -1,5 +1,6 @@
 'use client';
 
+import { Fullscreen } from 'lucide-react';
 import React, { useState, useRef, useEffect } from 'react';
 
 type GameState = 'menu' | 'game' | 'end';
@@ -51,24 +52,33 @@ const PaddleGame: React.FC = () => {
     mousePos: { x: 0, y: 0 },
   });
 
-  const CANVAS_WIDTH = canvasSize.width ;
-  const CANVAS_HEIGHT = canvasSize.height ;
+  const CANVAS_WIDTH = canvasSize.width;
+  const CANVAS_HEIGHT = canvasSize.height;
   const TARGET_AREA_TOP = 40;
   const TARGET_AREA_BOTTOM = CANVAS_HEIGHT * 0.4;
   const TARGET_SPAWN_Y = CANVAS_HEIGHT * 0.4;
   const NET_Y = CANVAS_HEIGHT * 0.65;
   const NET_HEIGHT = CANVAS_HEIGHT - NET_Y;
 
-  // Set canvas size on mount
+  // Set canvas size on mount and when fullscreen changes
   useEffect(() => {
-    setCanvasSize({ width: window.innerWidth, height: window.innerHeight });
-
-    const handleResize = () => {
-      setCanvasSize({ width: window.innerWidth, height: window.innerHeight });
+    const updateCanvasSize = () => {
+      console.log('Canvas updated:', window.innerWidth, window.innerHeight);
+      setCanvasSize({
+  width: window.screen.width,
+  height: window.screen.height,
+});
     };
 
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    updateCanvasSize();
+
+    window.addEventListener('resize', updateCanvasSize);
+    document.addEventListener('fullscreenchange', updateCanvasSize);
+    
+    return () => {
+      window.removeEventListener('resize', updateCanvasSize);
+      document.removeEventListener('fullscreenchange', updateCanvasSize);
+    };
   }, []);
 
   // Initialize game
@@ -84,11 +94,11 @@ const PaddleGame: React.FC = () => {
       totalHits: 0,
       mousePos: { x: 0, y: 0 },
     };
-   // if (typeof document !== 'undefined' && document.documentElement.requestFullscreen) {
-     //   document.documentElement.requestFullscreen().catch(() => {
-          // Fullscreen request failed, continue without fullscreen
-       // })
-      //}
+    if (typeof document !== 'undefined' && document.documentElement.requestFullscreen) {
+      document.documentElement.requestFullscreen().catch(() => {
+        // Fullscreen request failed, continue without Fullscreen
+      })
+     }
 
     // Create initial targets
     addNewTarget();
@@ -138,14 +148,18 @@ const PaddleGame: React.FC = () => {
   const calculatePoints = (distance: number, radius: number) => {
     const accuracy = 1 - distance / radius;
 
-    if (accuracy > 0.85) {
+    if (accuracy > 0.9) {
       return { points: 100, feedback: 'PERFECT' };
-    } else if (accuracy > 0.6) {
+    } else if (accuracy > 0.75) {
       return { points: 75, feedback: '+75' };
+    } else if (accuracy > 0.65) {
+      return { points: 60, feedback: '+60' };
     } else if (accuracy > 0.4) {
       return { points: 50, feedback: '+50' };
-    } else {
+    } else if (accuracy > 0.2) {
       return { points: 20, feedback: '+20' };
+    } else {
+      return { points: 10, feedback: '+10' };
     }
   };
 
@@ -481,100 +495,74 @@ const PaddleGame: React.FC = () => {
   // Render game screen
   const renderGame = () => (
     <div className="fixed inset-0 bg-slate-950 overflow-hidden">
-      {/* Canvas with minimal HUD */}
-      <div className="w-screen h-screen relative">
-        <canvas
-          ref={canvasRef}
-          width={CANVAS_WIDTH}
-          height={CANVAS_HEIGHT}
-          onClick={handleCanvasClick}
-          onMouseMove={handleMouseMove}
-          className="absolute inset-0 w-full h-full"
-        />
-
-        {/* HUD overlay on canvas */}
-        <div className="absolute top-6 left-8 text-cyan-400 font-mono pointer-events-none">
-          <div className="text-xs opacity-60">MODE</div>
-          <div className="text-xl font-bold">
-            {difficulty === 'easy' ? 'EASY' : difficulty === 'intermediate' ? 'INTER' : 'HARD'}
-          </div>
+      {/* Canvas fills entire screen */}
+      <canvas
+        ref={canvasRef}
+        width={CANVAS_WIDTH}
+        height={CANVAS_HEIGHT}
+        onClick={handleCanvasClick}
+        onMouseMove={handleMouseMove}
+        style={{
+          display: 'block',
+          width: '100vw',
+          height: '100vh',
+          margin: 0,
+          padding: 0,
+        }}
+      />
+      {/* HUD overlay on canvas */}
+      <div className="absolute top-6 left-8 text-cyan-400 font-mono pointer-events-none">
+        <div className="text-xs opacity-60">MODE</div>
+        <div className="text-xl font-bold">
+          {difficulty === 'easy' ? 'EASY' : difficulty === 'intermediate' ? 'INTER' : 'HARD'}
         </div>
+      </div>
 
-        <div className="absolute top-6 left-1/2 -translate-x-1/2 text-cyan-400 font-mono text-center pointer-events-none">
-          <div className="text-xs opacity-60 mb-1">TIME</div>
-          <div className="text-4xl font-bold tabular-nums">
-            {Math.floor(gameRef.current.timeLeft / 60)
-              .toString()
-              .padStart(2, '0')}
-            :
-            {Math.floor(gameRef.current.timeLeft % 60)
-              .toString()
-              .padStart(2, '0')}
-          </div>
+      <div className="absolute top-6 left-1/2 -translate-x-1/2 text-cyan-400 font-mono text-center pointer-events-none">
+        <div className="text-xs opacity-60 mb-1">TIME</div>
+        <div className="text-4xl font-bold tabular-nums">
+          {Math.floor(gameRef.current.timeLeft / 60)
+            .toString()
+            .padStart(2, '0')}
+          :
+          {Math.floor(gameRef.current.timeLeft % 60)
+            .toString()
+            .padStart(2, '0')}
         </div>
+      </div>
 
-        <div className="absolute top-6 right-8 text-cyan-400 font-mono text-right pointer-events-none">
-          <div className="text-xs opacity-60">SCORE</div>
-          <div className="text-4xl font-bold tabular-nums">{gameRef.current.score.toString().padStart(5, '0')}</div>
-        </div>
+      <div className="absolute top-6 right-8 text-cyan-400 font-mono text-right pointer-events-none">
+        <div className="text-xs opacity-60">SCORE</div>
+        <div className="text-4xl font-bold tabular-nums">{gameRef.current.score.toString().padStart(5, '0')}</div>
       </div>
     </div>
   );
 
   // Render end screen
-  const renderEnd = () => {
-    if (!gameStats) return null;
-
-    const percentage =
-      gameStats.totalHits > 0
-        ? Math.round((gameStats.perfectHits / gameStats.totalHits) * 100)
-        : 0;
-
-    return (
-      <div className="fixed inset-0 flex items-center justify-center bg-slate-950 bg-opacity-90">
-        <div className="bg-gradient-to-b from-slate-900 to-slate-950 rounded-lg p-12 max-w-md w-full mx-4 shadow-2xl text-center border border-cyan-500/50">
-          <h1 className="text-5xl font-bold text-cyan-400 mb-2 font-mono tracking-wider">
-            SESSION END
-          </h1>
-          <p className="text-cyan-300/60 text-sm mb-10 font-mono">MATCH RESULTS</p>
-          <div className="space-y-6 mb-10">
-            <div className="bg-slate-800/50 rounded-lg p-6 border border-cyan-500/30 backdrop-blur">
-              <p className="text-cyan-300/60 text-xs mb-2 font-mono tracking-widest">SCORE</p>
-              <p className="text-5xl font-bold text-cyan-400 font-mono tabular-nums">
-                {gameStats.finalScore.toString().padStart(5, '0')}
-              </p>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-slate-800/50 rounded-lg p-6 border border-cyan-500/30 backdrop-blur">
-                <p className="text-cyan-300/60 text-xs mb-2 font-mono tracking-widest">PERFECT</p>
-                <p className="text-3xl font-bold text-cyan-400 font-mono">
-                  {gameStats.perfectHits}/{gameStats.totalHits}
-                </p>
-              </div>
-              <div className="bg-slate-800/50 rounded-lg p-6 border border-cyan-500/30 backdrop-blur">
-                <p className="text-cyan-300/60 text-xs mb-2 font-mono tracking-widest">ACCURACY</p>
-                <p className="text-3xl font-bold text-cyan-400 font-mono">{percentage}%</p>
-              </div>
-            </div>
-          </div>
-          <div className="flex flex-col gap-3">
-            <button
-              onClick={() => initializeGame(difficulty)}
-              className="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold py-3 px-8 rounded transition-all text-sm uppercase tracking-wider font-mono"
-            >
-              Play Again
-            </button>
-            <button
-              onClick={() => setGameState('menu')}
-              className="bg-slate-700 hover:bg-slate-600 text-cyan-400 font-bold py-3 px-8 rounded transition-all text-sm uppercase tracking-wider font-mono border border-cyan-500/30"
-            >
-              Back to Menu
-            </button>
-          </div>
+  const renderEnd = () => (
+    <div className="fixed inset-0 flex items-center justify-center bg-slate-950 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(100,200,255,0.1),rgba(100,200,255,0))]">
+      <div className="text-center max-w-md w-full mx-4">
+        <h1 className="text-6xl font-bold text-cyan-400 mb-1 font-mono tracking-widest">
+          GAME OVER
+        </h1>
+        <div className="text-cyan-300/60 text-sm mb-4 font-mono tracking-wider">
+          Final Score: {gameStats?.finalScore}
         </div>
+        <div className="text-cyan-300/60 text-sm mb-4 font-mono tracking-wider">
+          Perfect Hits: {gameStats?.perfectHits}
+        </div>
+        <div className="text-cyan-300/60 text-sm mb-4 font-mono tracking-wider">
+          Total Hits: {gameStats?.totalHits}
+        </div>
+        <button
+          onClick={() => setGameState('menu')}
+          className="w-full bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-slate-950 font-bold py-3 px-6 rounded transition-all text-sm uppercase tracking-wider font-mono shadow-lg shadow-cyan-500/20"
+        >
+          Play Again
+        </button>
       </div>
-    );
-  };
+    </div>
+  );
 
   return (
     <div className="w-full h-screen bg-slate-900">
