@@ -14,6 +14,7 @@ interface Target {
   size: 'small' | 'large';
   velocity?: number;
   direction?: number;
+  createdAt?: number; // Timestamp when target was created
 }
 
 interface Feedback {
@@ -28,6 +29,9 @@ interface GameStats {
   finalScore: number;
   perfectHits: number;
   totalHits: number;
+  reactionTimes: number[]; // Array of reaction times in milliseconds
+  averageReactionTime: number; // Average reaction time in milliseconds
+  mode: Difficulty;
 }
 
 const PaddleGame: React.FC = () => {
@@ -50,6 +54,7 @@ const PaddleGame: React.FC = () => {
     perfectHits: 0,
     totalHits: 0,
     mousePos: { x: 0, y: 0 },
+    reactionTimes: [] as number[],
   });
 
   const CANVAS_WIDTH = canvasSize.width;
@@ -93,6 +98,7 @@ const PaddleGame: React.FC = () => {
       perfectHits: 0,
       totalHits: 0,
       mousePos: { x: 0, y: 0 },
+      reactionTimes: [],
     };
     if (typeof document !== 'undefined' && document.documentElement.requestFullscreen) {
       document.documentElement.requestFullscreen().catch(() => {
@@ -141,6 +147,7 @@ const PaddleGame: React.FC = () => {
       size,
       velocity,
       direction,
+      createdAt: Date.now(),
     });
   };
 
@@ -196,6 +203,10 @@ const PaddleGame: React.FC = () => {
       if (distance <= target.radius) {
         hitTarget = target;
         const { points, feedback } = calculatePoints(distance, target.radius);
+
+        // Calculate reaction time
+        const reactionTime = target.createdAt ? Date.now() - target.createdAt : 0;
+        gameRef.current.reactionTimes.push(reactionTime);
 
         gameRef.current.score += points;
         gameRef.current.totalHits++;
@@ -434,10 +445,19 @@ const PaddleGame: React.FC = () => {
       if (gameRef.current.timeLeft > 0) {
         animationRef.current = requestAnimationFrame(gameLoop);
       } else {
+        const avgReactionTime =
+          gameRef.current.reactionTimes.length > 0
+            ? gameRef.current.reactionTimes.reduce((a, b) => a + b, 0) /
+              gameRef.current.reactionTimes.length
+            : 0;
+
         const stats: GameStats = {
           finalScore: gameRef.current.score,
           perfectHits: gameRef.current.perfectHits,
           totalHits: gameRef.current.totalHits,
+          reactionTimes: gameRef.current.reactionTimes,
+          averageReactionTime: avgReactionTime,
+          mode: difficulty,
         };
         setGameStats(stats);
         setGameState('end');
@@ -539,30 +559,72 @@ const PaddleGame: React.FC = () => {
   );
 
   // Render end screen
-  const renderEnd = () => (
-    <div className="fixed inset-0 flex items-center justify-center bg-slate-950 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(100,200,255,0.1),rgba(100,200,255,0))]">
-      <div className="text-center max-w-md w-full mx-4">
-        <h1 className="text-6xl font-bold text-cyan-400 mb-1 font-mono tracking-widest">
-          GAME OVER
-        </h1>
-        <div className="text-cyan-300/60 text-sm mb-4 font-mono tracking-wider">
-          Final Score: {gameStats?.finalScore}
+  const renderEnd = () => {
+    if (!gameStats) return null;
+
+    return (
+      <div className="fixed inset-0 flex items-center justify-center bg-slate-950 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(100,200,255,0.1),rgba(100,200,255,0))]">
+        <div className="text-center max-w-md w-full mx-4">
+          <h1 className="text-6xl font-bold text-cyan-400 mb-1 font-mono tracking-widest">
+            SESSION END
+          </h1>
+          <p className="text-cyan-300/60 text-sm mb-8 font-mono">MATCH RESULTS</p>
+
+          <div className="bg-slate-800/50 rounded-lg p-6 border border-cyan-500/30 backdrop-blur mb-6 space-y-4">
+            <div>
+              <div className="text-xs opacity-60 font-mono">MODE</div>
+              <div className="text-2xl font-bold text-cyan-400 uppercase">
+                {gameStats.mode === 'easy' ? 'Easy' : gameStats.mode === 'intermediate' ? 'Intermediate' : 'Hard'}
+              </div>
+            </div>
+
+            <div className="border-t border-cyan-500/20 pt-4">
+              <div className="text-xs opacity-60 font-mono mb-2">SCORE</div>
+              <div className="text-5xl font-bold text-cyan-400 font-mono tabular-nums">
+                {gameStats.finalScore.toString().padStart(5, '0')}
+              </div>
+            </div>
+
+            <div className="border-t border-cyan-500/20 pt-4">
+              <div className="text-xs opacity-60 font-mono mb-2">ACCURACY</div>
+              <div className="text-3xl font-bold text-cyan-400 font-mono">
+                {gameStats.totalHits > 0
+                  ? Math.round((gameStats.perfectHits / gameStats.totalHits) * 100)
+                  : 0}
+                %
+              </div>
+              <div className="text-xs text-cyan-300/60 mt-1">
+                {gameStats.perfectHits} / {gameStats.totalHits} Perfect Hits
+              </div>
+            </div>
+
+            <div className="border-t border-cyan-500/20 pt-4">
+              <div className="text-xs opacity-60 font-mono mb-2">AVG REACTION TIME</div>
+              <div className="text-3xl font-bold text-cyan-400 font-mono">
+                {Math.round(gameStats.averageReactionTime)}
+                <span className="text-lg">ms</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <button
+              onClick={() => initializeGame(gameStats.mode)}
+              className="flex-1 bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-slate-950 font-bold py-3 px-6 rounded transition-all text-sm uppercase tracking-wider font-mono shadow-lg shadow-cyan-500/20"
+            >
+              Play Again
+            </button>
+            <button
+              onClick={() => setGameState('menu')}
+              className="flex-1 bg-slate-700 hover:bg-slate-600 text-cyan-400 font-bold py-3 px-6 rounded transition-all text-sm uppercase tracking-wider font-mono border border-cyan-500/30"
+            >
+              Menu
+            </button>
+          </div>
         </div>
-        <div className="text-cyan-300/60 text-sm mb-4 font-mono tracking-wider">
-          Perfect Hits: {gameStats?.perfectHits}
-        </div>
-        <div className="text-cyan-300/60 text-sm mb-4 font-mono tracking-wider">
-          Total Hits: {gameStats?.totalHits}
-        </div>
-        <button
-          onClick={() => setGameState('menu')}
-          className="w-full bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-slate-950 font-bold py-3 px-6 rounded transition-all text-sm uppercase tracking-wider font-mono shadow-lg shadow-cyan-500/20"
-        >
-          Play Again
-        </button>
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="w-full h-screen bg-slate-900">
