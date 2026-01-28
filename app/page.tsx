@@ -155,19 +155,16 @@ const PaddleGame: React.FC = () => {
   const calculatePoints = (distance: number, radius: number) => {
     const accuracy = 1 - distance / radius;
 
-    if (accuracy > 0.9) {
-      return { points: 100, feedback: 'PERFECT' };
-    } else if (accuracy > 0.75) {
-      return { points: 75, feedback: '+75' };
-    } else if (accuracy > 0.65) {
-      return { points: 60, feedback: '+60' };
-    } else if (accuracy > 0.4) {
-      return { points: 50, feedback: '+50' };
-    } else if (accuracy > 0.2) {
-      return { points: 20, feedback: '+20' };
-    } else {
-      return { points: 10, feedback: '+10' };
-    }
+     if (accuracy > 0.95) {
+    return { points: 100, feedback: 'PERFECT' };
+  }
+
+  const points = Math.floor(accuracy * 100);
+
+  return {
+    points,
+    feedback: `+${points}`,
+  };
   };
 
   // Handle canvas click
@@ -398,7 +395,7 @@ const PaddleGame: React.FC = () => {
         ctx.shadowBlur = 15;
       } else {
         ctx.fillStyle = '#ff4444';
-        ctx.font = 'bold 24px "Courier New", monospace';
+        ctx.font = 'bold 32px "Courier New", monospace';
         ctx.shadowColor = '#ff4444';
         ctx.shadowBlur = 10;
       }
@@ -572,21 +569,21 @@ const PaddleGame: React.FC = () => {
 
           <div className="bg-slate-800/50 rounded-lg p-6 border border-cyan-500/30 backdrop-blur mb-6 space-y-4">
             <div>
-              <div className="text-xs opacity-60 font-mono">MODE</div>
+              <div className="text-xs text-cyan-300/60 opacity-60 font-mono">MODE</div>
               <div className="text-2xl font-bold text-cyan-400 uppercase">
                 {gameStats.mode === 'easy' ? 'Easy' : gameStats.mode === 'intermediate' ? 'Intermediate' : 'Hard'}
               </div>
             </div>
 
             <div className="border-t border-cyan-500/20 pt-4">
-              <div className="text-xs opacity-60 font-mono mb-2">SCORE</div>
+              <div className="text-xs text-cyan-300/60 opacity-60 font-mono mb-2">SCORE</div>
               <div className="text-5xl font-bold text-cyan-400 font-mono tabular-nums">
                 {gameStats.finalScore.toString().padStart(5, '0')}
               </div>
             </div>
 
             <div className="border-t border-cyan-500/20 pt-4">
-              <div className="text-xs opacity-60 font-mono mb-2">ACCURACY</div>
+              <div className="text-xs text-cyan-300/60 opacity-60 font-mono mb-2">ACCURACY</div>
               <div className="text-3xl font-bold text-cyan-400 font-mono">
                 {gameStats.totalHits > 0
                   ? Math.round((gameStats.perfectHits / gameStats.totalHits) * 100)
@@ -599,10 +596,10 @@ const PaddleGame: React.FC = () => {
             </div>
 
             <div className="border-t border-cyan-500/20 pt-4">
-              <div className="text-xs opacity-60 font-mono mb-2">AVG REACTION TIME</div>
+              <div className="text-xs text-cyan-300/60 opacity-60 font-mono mb-2">AVG REACTION TIME</div>
               <div className="text-3xl font-bold text-cyan-400 font-mono">
-                {Math.round(gameStats.averageReactionTime)}
-                <span className="text-lg">ms</span>
+                {(gameStats.averageReactionTime / 1000).toFixed(2)}
+                <span className="text-lg">s</span>
               </div>
             </div>
           </div>
