@@ -473,38 +473,38 @@ const PaddleGame: React.FC = () => {
   // Render menu screen
   const renderMenu = () => (
     <div className="fixed inset-0 flex items-center justify-center bg-slate-950 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(100,200,255,0.1),rgba(100,200,255,0))]">
-      <div className="text-center max-w-md w-full mx-4">
-        <h1 className="text-6xl font-bold text-cyan-400 mb-1 font-mono tracking-widest">
+      <div className="text-center max-w-2xl w-full mx-4">
+        <h1 className="text-8xl font-bold text-cyan-400 mb-2 font-mono tracking-widest">
           PADEL
         </h1>
-        <p className="text-cyan-300/60 text-sm mb-4 font-mono tracking-wider">TRAINING SIMULATOR</p>
+        <p className="text-cyan-300/60 text-xl mb-12 font-mono tracking-wider">TRAINING SIMULATOR</p>
 
-        <div className="bg-gradient-to-b from-slate-900 to-slate-950 rounded-lg p-8 border border-cyan-500/50 backdrop-blur mb-6">
-          <p className="text-cyan-300/80 text-xs mb-6 font-mono">SELECT DIFFICULTY</p>
+        <div className="bg-gradient-to-b from-slate-900 to-slate-950 rounded-lg p-12 border border-cyan-500/50 backdrop-blur mb-8">
+          <p className="text-cyan-300/80 text-lg mb-8 font-mono tracking-wider">SELECT DIFFICULTY</p>
 
-          <div className="space-y-3">
+          <div className="space-y-4">
             <button
               onClick={() => initializeGame('easy')}
-              className="w-full bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-slate-950 font-bold py-3 px-6 rounded transition-all text-sm uppercase tracking-wider font-mono shadow-lg shadow-cyan-500/20"
+              className="w-full bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-slate-950 font-bold py-5 px-8 rounded transition-all text-2xl uppercase tracking-wider font-mono shadow-lg shadow-cyan-500/20"
             >
               Easy
             </button>
             <button
               onClick={() => initializeGame('intermediate')}
-              className="w-full bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-slate-950 font-bold py-3 px-6 rounded transition-all text-sm uppercase tracking-wider font-mono shadow-lg shadow-blue-500/20"
+              className="w-full bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-slate-950 font-bold py-5 px-8 rounded transition-all text-2xl uppercase tracking-wider font-mono shadow-lg shadow-blue-500/20"
             >
               Intermediate
             </button>
             <button
               onClick={() => initializeGame('hard')}
-              className="w-full bg-gradient-to-r from-purple-600 to-blue-500 hover:from-purple-500 hover:to-blue-400 text-slate-950 font-bold py-3 px-6 rounded transition-all text-sm uppercase tracking-wider font-mono shadow-lg shadow-purple-500/20"
+              className="w-full bg-gradient-to-r from-purple-600 to-blue-500 hover:from-purple-500 hover:to-blue-400 text-slate-950 font-bold py-5 px-8 rounded transition-all text-2xl uppercase tracking-wider font-mono shadow-lg shadow-purple-500/20"
             >
               Hard
             </button>
           </div>
         </div>
 
-        <p className="text-cyan-300/40 text-xs font-mono tracking-wider">60 SECOND SESSION</p>
+        <p className="text-cyan-300/40 text-lg font-mono tracking-wider">60 SECOND SESSION</p>
       </div>
     </div>
   );
@@ -561,16 +561,16 @@ const PaddleGame: React.FC = () => {
 
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-slate-950 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(100,200,255,0.1),rgba(100,200,255,0))]">
-        <div className="text-center max-w-md w-full mx-4">
-          <h1 className="text-6xl font-bold text-cyan-400 mb-1 font-mono tracking-widest">
+        <div className="text-center max-w-xl w-full mx-4">
+          <h1 className="text-6xl font-bold text-cyan-400 mb-2 font-mono tracking-widest">
             SESSION END
           </h1>
-          <p className="text-cyan-300/60 text-sm mb-8 font-mono">MATCH RESULTS</p>
+          <p className="text-cyan-300/60 text-lg mb-6 font-mono">MATCH RESULTS</p>
 
-          <div className="bg-slate-800/50 rounded-lg p-6 border border-cyan-500/30 backdrop-blur mb-6 space-y-4">
+          <div className="bg-slate-800/50 rounded-lg p-8 border border-cyan-500/30 backdrop-blur mb-6 space-y-4">
             <div>
-              <div className="text-xs text-cyan-300/60 opacity-60 font-mono">MODE</div>
-              <div className="text-2xl font-bold text-cyan-400 uppercase">
+              <div className="text-xs text-cyan-300/60 opacity-60 font-mono mb-1">MODE</div>
+              <div className="text-3xl font-bold text-cyan-400 uppercase">
                 {gameStats.mode === 'easy' ? 'Easy' : gameStats.mode === 'intermediate' ? 'Intermediate' : 'Hard'}
               </div>
             </div>
@@ -584,22 +584,22 @@ const PaddleGame: React.FC = () => {
 
             <div className="border-t border-cyan-500/20 pt-4">
               <div className="text-xs text-cyan-300/60 opacity-60 font-mono mb-2">ACCURACY</div>
-              <div className="text-3xl font-bold text-cyan-400 font-mono">
+              <div className="text-4xl font-bold text-cyan-400 font-mono">
                 {gameStats.totalHits > 0
                   ? Math.round((gameStats.perfectHits / gameStats.totalHits) * 100)
                   : 0}
                 %
               </div>
-              <div className="text-xs text-cyan-300/60 mt-1">
+              <div className="text-sm text-cyan-300/60 mt-1">
                 {gameStats.perfectHits} / {gameStats.totalHits} Perfect Hits
               </div>
             </div>
 
             <div className="border-t border-cyan-500/20 pt-4">
               <div className="text-xs text-cyan-300/60 opacity-60 font-mono mb-2">AVG REACTION TIME</div>
-              <div className="text-3xl font-bold text-cyan-400 font-mono">
+              <div className="text-4xl font-bold text-cyan-400 font-mono">
                 {(gameStats.averageReactionTime / 1000).toFixed(2)}
-                <span className="text-lg">s</span>
+                <span className="text-2xl">s</span>
               </div>
             </div>
           </div>
@@ -607,13 +607,13 @@ const PaddleGame: React.FC = () => {
           <div className="flex gap-3">
             <button
               onClick={() => initializeGame(gameStats.mode)}
-              className="flex-1 bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-slate-950 font-bold py-3 px-6 rounded transition-all text-sm uppercase tracking-wider font-mono shadow-lg shadow-cyan-500/20"
+              className="flex-1 bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-slate-950 font-bold py-4 px-6 rounded transition-all text-xl uppercase tracking-wider font-mono shadow-lg shadow-cyan-500/20"
             >
               Play Again
             </button>
             <button
               onClick={() => setGameState('menu')}
-              className="flex-1 bg-slate-700 hover:bg-slate-600 text-cyan-400 font-bold py-3 px-6 rounded transition-all text-sm uppercase tracking-wider font-mono border border-cyan-500/30"
+              className="flex-1 bg-slate-700 hover:bg-slate-600 text-cyan-400 font-bold py-4 px-6 rounded transition-all text-xl uppercase tracking-wider font-mono border border-cyan-500/30"
             >
               Menu
             </button>
