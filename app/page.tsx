@@ -23,6 +23,16 @@ interface Feedback {
   text: string;
   points: number;
   opacity: number;
+  isMiss?: boolean; // Flag for sparkle effect
+}
+
+interface Sparkle {
+  x: number;
+  y: number;
+  life: number;
+  angle: number;
+  speed: number;
+  rotation?: number;
 }
 
 interface GameStats {
@@ -50,6 +60,7 @@ const PaddleGame: React.FC = () => {
     timeLeft: 60,
     targets: [] as Target[],
     feedback: [] as Feedback[],
+    sparkles: [] as Sparkle[],
     nextTargetId: 0,
     perfectHits: 0,
     totalHits: 0,
@@ -70,9 +81,9 @@ const PaddleGame: React.FC = () => {
     const updateCanvasSize = () => {
       console.log('Canvas updated:', window.innerWidth, window.innerHeight);
       setCanvasSize({
-  width: window.screen.width,
-  height: window.screen.height,
-});
+        width: window.screen.width,
+        height: window.screen.height,
+      });
     };
 
     updateCanvasSize();
@@ -94,6 +105,7 @@ const PaddleGame: React.FC = () => {
       timeLeft: 60,
       targets: [],
       feedback: [],
+      sparkles: [],
       nextTargetId: 0,
       perfectHits: 0,
       totalHits: 0,
@@ -103,23 +115,24 @@ const PaddleGame: React.FC = () => {
     if (typeof document !== 'undefined' && document.documentElement.requestFullscreen) {
       document.documentElement.requestFullscreen().catch(() => {
         // Fullscreen request failed, continue without Fullscreen
-      })
-     }
+      });
+    }
 
-    // Create initial targets
-    addNewTarget();
-    addNewTarget();
+    // Create initial targets (pass difficulty directly to avoid async state issues)
+    addNewTarget(selectedDifficulty);
+    addNewTarget(selectedDifficulty);
 
     setGameState('game');
   };
 
   // Add new target
-  const addNewTarget = () => {
+  const addNewTarget = (diff?: Difficulty) => {
+    const currentDifficulty = diff || difficulty;
     let x, radius, size;
     let validPosition = false;
 
     while (!validPosition) {
-      size = difficulty === 'easy' ? 'large' : Math.random() > 0.5 ? 'large' : 'small';
+      size = currentDifficulty === 'easy' ? 'large' : Math.random() > 0.5 ? 'large' : 'small';
       radius = size === 'large' ? 190 : 130; // 2x bigger from previous
 
       // Spawn targets horizontally across the top area, all at same Y level
@@ -136,7 +149,7 @@ const PaddleGame: React.FC = () => {
       }
     }
 
-    const velocity = difficulty === 'hard' ? Math.random() * 1.5 + 0.5 : 0;
+    const velocity = currentDifficulty === 'hard' ? Math.random() * 1.5 + 0.5 : 0;
     const direction = Math.random() > 0.5 ? 1 : -1;
 
     gameRef.current.targets.push({
@@ -155,16 +168,16 @@ const PaddleGame: React.FC = () => {
   const calculatePoints = (distance: number, radius: number) => {
     const accuracy = 1 - distance / radius;
 
-     if (accuracy > 0.95) {
-    return { points: 100, feedback: 'PERFECT' };
-  }
+    if (accuracy > 0.95) {
+      return { points: 100, feedback: 'PERFECT' };
+    }
 
-  const points = Math.floor(accuracy * 100);
+    const points = Math.floor(accuracy * 100);
 
-  return {
-    points,
-    feedback: `+${points}`,
-  };
+    return {
+      points,
+      feedback: `+${points}`,
+    };
   };
 
   // Handle canvas click
@@ -222,6 +235,30 @@ const PaddleGame: React.FC = () => {
         gameRef.current.targets.splice(i, 1);
         addNewTarget();
         break;
+      }
+    }
+
+    // If no target was hit, show miss feedback with sparkles
+    if (!hitTarget) {
+      gameRef.current.feedback.push({
+        x: clickX,
+        y: clickY,
+        text: 'MISS',
+        points: 0,
+        opacity: 1,
+        isMiss: true,
+      });
+
+      // Create sparkles around the miss location
+      for (let i = 0; i < 8; i++) {
+        gameRef.current.sparkles.push({
+          x: clickX,
+          y: clickY,
+          life: 1,
+          angle: (i / 8) * Math.PI * 2,
+          speed: 2 + Math.random() * 2,
+          rotation: Math.random() * Math.PI * 2,
+        });
       }
     }
   };
@@ -369,6 +406,64 @@ const PaddleGame: React.FC = () => {
       ctx.stroke();
     }
 
+    // Draw sparkles for misses
+    for (let i = gameRef.current.sparkles.length - 1; i >= 0; i--) {
+      const sparkle = gameRef.current.sparkles[i];
+      sparkle.life -= 0.02;
+
+      if (sparkle.life <= 0) {
+        gameRef.current.sparkles.splice(i, 1);
+        continue;
+      }
+
+      // Move sparkle outward
+      const distance = sparkle.speed * (1 - sparkle.life);
+      const x = sparkle.x + Math.cos(sparkle.angle) * distance;
+      const y = sparkle.y + Math.sin(sparkle.angle) * distance;
+
+      // Animate rotation
+      sparkle.rotation! += 0.15;
+
+      // Draw sparkle with yellow glow and scaling animation
+      const sparkleSize = 8 + sparkle.life * 8;
+      const scale = 1 + Math.sin(Date.now() / 1000 * 8 - sparkle.angle) * 0.4;
+      ctx.globalAlpha = sparkle.life * 0.8;
+      ctx.fillStyle = '#ffff00';
+      ctx.shadowColor = '#ffff00';
+      ctx.shadowBlur = 10;
+
+      // Save context for rotation
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(sparkle.rotation!);
+
+      // Draw center circle
+      ctx.beginPath();
+      ctx.arc(0, 0, sparkleSize * scale, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Draw rotating star shape
+      ctx.strokeStyle = '#ffff00';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      for (let j = 0; j < 4; j++) {
+        const angle = (j / 4) * Math.PI * 2 + sparkle.rotation!;
+        const size = sparkleSize * 1.8 * scale;
+        const px = Math.cos(angle) * size;
+        const py = Math.sin(angle) * size;
+        if (j === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.stroke();
+
+      // Restore context
+      ctx.restore();
+    }
+
+    ctx.shadowColor = 'transparent';
+    ctx.globalAlpha = 1;
+
     // Draw feedback text with glow
     for (let i = gameRef.current.feedback.length - 1; i >= 0; i--) {
       const fb = gameRef.current.feedback[i];
@@ -376,6 +471,11 @@ const PaddleGame: React.FC = () => {
 
       if (fb.opacity <= 0) {
         gameRef.current.feedback.splice(i, 1);
+        continue;
+      }
+
+      // Skip rendering MISS text (only show sparkles)
+      if (fb.text === 'MISS' && fb.isMiss) {
         continue;
       }
 
@@ -393,6 +493,11 @@ const PaddleGame: React.FC = () => {
         ctx.font = 'bold 32px "Courier New", monospace';
         ctx.shadowColor = '#00ff88';
         ctx.shadowBlur = 15;
+      } else if (fb.text === 'MISS' && fb.isMiss) {
+        ctx.fillStyle = '#ffff00';
+        ctx.font = 'bold 36px "Courier New", monospace';
+        ctx.shadowColor = '#ffff00';
+        ctx.shadowBlur = 18;
       } else {
         ctx.fillStyle = '#ff4444';
         ctx.font = 'bold 32px "Courier New", monospace';
@@ -576,7 +681,7 @@ const PaddleGame: React.FC = () => {
             </div>
 
             <div className="border-t border-cyan-500/20 pt-4">
-              <div className="text-xs text-cyan-300/60 opacity-60 font-mono mb-2">SCORE</div>
+              <div className="text-xs text-cyan-300/60 opacity-60 font-mono mb-1">SCORE</div>
               <div className="text-5xl font-bold text-cyan-400 font-mono tabular-nums">
                 {gameStats.finalScore.toString().padStart(5, '0')}
               </div>
