@@ -53,6 +53,7 @@ const PaddleGame: React.FC = () => {
   const [gameState, setGameState] = useState<GameState>('menu');
   const [difficulty, setDifficulty] = useState<Difficulty>('easy');
   const [gameStats, setGameStats] = useState<GameStats | null>(null);
+  const [countdown, setCountdown] = useState<number | null>(null);
 
   // Game Variables
   const gameRef = useRef({
@@ -66,13 +67,15 @@ const PaddleGame: React.FC = () => {
     totalHits: 0,
     mousePos: { x: 0, y: 0 },
     reactionTimes: [] as number[],
+    combo: 0,
+    comboOpacity: 0,
   });
 
   const CANVAS_WIDTH = canvasSize.width;
   const CANVAS_HEIGHT = canvasSize.height;
   const TARGET_AREA_TOP = 40;
   const TARGET_AREA_BOTTOM = CANVAS_HEIGHT * 0.4;
-  const TARGET_SPAWN_Y = CANVAS_HEIGHT * 0.4;
+  const TARGET_SPAWN_Y = CANVAS_HEIGHT * 0.33;
   const NET_Y = CANVAS_HEIGHT * 0.65;
   const NET_HEIGHT = CANVAS_HEIGHT - NET_Y;
 
@@ -111,6 +114,8 @@ const PaddleGame: React.FC = () => {
       totalHits: 0,
       mousePos: { x: 0, y: 0 },
       reactionTimes: [],
+      combo: 0,
+      comboOpacity: 0,
     };
     if (typeof document !== 'undefined' && document.documentElement.requestFullscreen) {
       document.documentElement.requestFullscreen().catch(() => {
@@ -118,14 +123,28 @@ const PaddleGame: React.FC = () => {
       });
     }
 
-    // Create initial targets (pass difficulty directly to avoid async state issues)
-    addNewTarget(selectedDifficulty);
-    addNewTarget(selectedDifficulty);
-
+    // Set game state to show game screen
     setGameState('game');
+    // Start countdown
+    setCountdown(3);
   };
 
-  // Add new target
+  // Handle countdown
+  useEffect(() => {
+    if (countdown === null || gameState !== 'game') return;
+
+    if (countdown > 0) {
+      const timer = setTimeout(() => {
+        setCountdown(countdown - 1);
+      }, 1000);
+      return () => clearTimeout(timer);
+    } else if (countdown === 0) {
+      // Countdown finished, add targets and clear countdown
+      addNewTarget(difficulty);
+      addNewTarget(difficulty);
+      setCountdown(null);
+    }
+  }, [countdown, gameState, difficulty]);
   const addNewTarget = (diff?: Difficulty) => {
     const currentDifficulty = diff || difficulty;
     let x, radius, size;
@@ -133,7 +152,7 @@ const PaddleGame: React.FC = () => {
 
     while (!validPosition) {
       size = currentDifficulty === 'easy' ? 'large' : Math.random() > 0.5 ? 'large' : 'small';
-      radius = size === 'large' ? 190 : 130; // 2x bigger from previous
+      radius = size === 'large' ? 170 : 110; // 2x bigger from previous
 
       // Spawn targets horizontally across the top area, all at same Y level
       x = Math.random() * (CANVAS_WIDTH - radius * 2) + radius;
@@ -218,10 +237,17 @@ const PaddleGame: React.FC = () => {
         const reactionTime = target.createdAt ? Date.now() - target.createdAt : 0;
         gameRef.current.reactionTimes.push(reactionTime);
 
-        gameRef.current.score += points;
         gameRef.current.totalHits++;
         if (feedback === 'PERFECT') {
           gameRef.current.perfectHits++;
+          gameRef.current.combo++;
+          gameRef.current.comboOpacity = 1;
+          // Add combo bonus: combo number * 100 points
+          const comboBonus = gameRef.current.combo * 100;
+          gameRef.current.score += points + comboBonus -100;
+        } else {
+          gameRef.current.combo = 0;
+          gameRef.current.score += points;
         }
 
         gameRef.current.feedback.push({
@@ -248,6 +274,7 @@ const PaddleGame: React.FC = () => {
         opacity: 1,
         isMiss: true,
       });
+      gameRef.current.combo = 0;
 
       // Create sparkles around the miss location
       for (let i = 0; i < 8; i++) {
@@ -512,68 +539,115 @@ const PaddleGame: React.FC = () => {
     ctx.globalAlpha = 1;
   };
 
+  // Draw combo counter
+  const drawCombo = (ctx: CanvasRenderingContext2D) => {
+    if (gameRef.current.combo > 0) {
+      // Fade out combo opacity over time
+      gameRef.current.comboOpacity = Math.max(0, gameRef.current.comboOpacity - 0.02);
+
+      if (gameRef.current.comboOpacity > 0) {
+        const comboX = CANVAS_WIDTH / 2;
+        const comboY = CANVAS_HEIGHT * 0.25;
+
+        ctx.globalAlpha = gameRef.current.comboOpacity;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        // Draw combo text with scaling animation
+        const scale = 0.8 + gameRef.current.comboOpacity * 0.4;
+        
+        // Glow effect
+        ctx.fillStyle = 'rgba(255, 215, 0, 0.6)';
+        ctx.font = `bold ${Math.floor(80 * scale)}px "Courier New", monospace`;
+        ctx.shadowColor = 'rgba(255, 215, 0, 1)';
+        ctx.shadowBlur = 30;
+        ctx.fillText(`COMBO x${gameRef.current.combo}`, comboX, comboY);
+
+        // Extra glow layer
+        ctx.shadowColor = 'rgba(255, 255, 0, 0.8)';
+        ctx.shadowBlur = 50;
+        ctx.fillStyle = 'rgba(255, 255, 0, 0.9)';
+        ctx.font = `bold ${Math.floor(80 * scale)}px "Courier New", monospace`;
+        ctx.fillText(`COMBO x${gameRef.current.combo}`, comboX, comboY);
+
+        ctx.globalAlpha = 1;
+        ctx.shadowColor = 'transparent';
+      }
+    }
+  };
+
   // Game loop
   const [, setRender] = useState(0);
 
   useEffect(() => {
-    if (gameState !== 'game') return;
-
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const startTime = Date.now();
+    // Draw during countdown and game states
+    if (gameState === 'game') {
+      if (countdown !== null) {
+        // Just draw the canvas background during countdown
+        draw(ctx);
+        animationRef.current = requestAnimationFrame(() => {});
+        return;
+      }
 
-    const gameLoop = () => {
-      const elapsed = (Date.now() - startTime) / 1000;
-      gameRef.current.timeLeft = Math.max(0, 60 - elapsed);
+      // Actual game loop when countdown is done
+      const startTime = Date.now();
 
-      // Move targets for hard difficulty
-      if (difficulty === 'hard') {
-        const time = Date.now() / 1000;
-        for (const target of gameRef.current.targets) {
-          const baseX = target.x;
-          target.x += Math.sin(time * 2) * 2;
-          target.x = Math.max(target.radius, Math.min(CANVAS_WIDTH - target.radius, target.x));
+      const gameLoop = () => {
+        const elapsed = (Date.now() - startTime) / 1000;
+        gameRef.current.timeLeft = Math.max(0, 60 - elapsed);
+
+        // Move targets for hard difficulty
+        if (difficulty === 'hard') {
+          const time = Date.now() / 1000;
+          for (const target of gameRef.current.targets) {
+            const baseX = target.x;
+            target.x += Math.sin(time * 2) * 2;
+            target.x = Math.max(target.radius, Math.min(CANVAS_WIDTH - target.radius, target.x));
+          }
         }
-      }
 
-      draw(ctx);
-      // Force React to re-render HUD
-      setRender(prev => prev + 1);
+        draw(ctx);
+        drawCombo(ctx);
+        // Force React to re-render HUD
+        setRender(prev => prev + 1);
 
-      if (gameRef.current.timeLeft > 0) {
-        animationRef.current = requestAnimationFrame(gameLoop);
-      } else {
-        const avgReactionTime =
-          gameRef.current.reactionTimes.length > 0
-            ? gameRef.current.reactionTimes.reduce((a, b) => a + b, 0) /
-              gameRef.current.reactionTimes.length
-            : 0;
+        if (gameRef.current.timeLeft > 0) {
+          animationRef.current = requestAnimationFrame(gameLoop);
+        } else {
+          const avgReactionTime =
+            gameRef.current.reactionTimes.length > 0
+              ? gameRef.current.reactionTimes.reduce((a, b) => a + b, 0) /
+                gameRef.current.reactionTimes.length
+              : 0;
 
-        const stats: GameStats = {
-          finalScore: gameRef.current.score,
-          perfectHits: gameRef.current.perfectHits,
-          totalHits: gameRef.current.totalHits,
-          reactionTimes: gameRef.current.reactionTimes,
-          averageReactionTime: avgReactionTime,
-          mode: difficulty,
-        };
-        setGameStats(stats);
-        setGameState('end');
-      }
-    };
+          const stats: GameStats = {
+            finalScore: gameRef.current.score,
+            perfectHits: gameRef.current.perfectHits,
+            totalHits: gameRef.current.totalHits,
+            reactionTimes: gameRef.current.reactionTimes,
+            averageReactionTime: avgReactionTime,
+            mode: difficulty,
+          };
+          setGameStats(stats);
+          setGameState('end');
+        }
+      };
 
-    animationRef.current = requestAnimationFrame(gameLoop);
+      animationRef.current = requestAnimationFrame(gameLoop);
 
-    return () => {
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-      }
-    };
-  }, [gameState, difficulty]);
+      return () => {
+        if (animationRef.current) {
+          cancelAnimationFrame(animationRef.current);
+        }
+      };
+    }
+  }, [gameState, difficulty, countdown]);
 
   // Render menu screen
   const renderMenu = () => (
@@ -632,6 +706,47 @@ const PaddleGame: React.FC = () => {
           padding: 0,
         }}
       />
+      
+      {/* Countdown overlay */}
+      {countdown !== null && countdown > 0 && (
+        <div className="fixed inset-0 flex items-center justify-center pointer-events-none z-50">
+          <div className="text-center">
+            <div className="font-bold text-yellow-400 font-mono animate-pulse"
+              style={{
+                fontSize: '250px',
+                lineHeight: '1',
+                textShadow: '0 0 50px rgba(250, 204, 21, 0.8), 0 0 100px rgba(250, 204, 21, 0.5), 0 0 150px rgba(250, 204, 21, 0.3)',
+                animation: 'pulse 1s ease-in-out infinite'
+              }}>
+              {countdown}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* START text when countdown reaches 0 */}
+      {countdown === 0 && (
+        <div className="fixed inset-0 flex items-center justify-center pointer-events-none z-50">
+          <div className="text-center">
+            <div className="font-bold text-green-400 font-mono"
+              style={{
+                fontSize: '250px',
+                lineHeight: '1',
+                textShadow: '0 0 50px rgba(34, 197, 94, 0.8), 0 0 100px rgba(34, 197, 94, 0.5), 0 0 150px rgba(34, 197, 94, 0.3)',
+                animation: 'fadeOut 0.8s ease-out forwards'
+              }}>
+              START
+            </div>
+          </div>
+          <style>{`
+            @keyframes fadeOut {
+              0% { opacity: 1; transform: scale(1); }
+              100% { opacity: 0; transform: scale(1.2); }
+            }
+          `}</style>
+        </div>
+      )}
+      
       {/* HUD overlay on canvas */}
       <div className="absolute top-6 left-8 text-cyan-400 font-mono pointer-events-none">
         <div className="text-xs opacity-60">MODE</div>
