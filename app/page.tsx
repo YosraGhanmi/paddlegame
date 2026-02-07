@@ -47,6 +47,7 @@ interface GameStats {
 const PaddleGame: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number>();
+  const gameStartTimeRef = useRef<number | null>(null);
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
 
   // Game State
@@ -117,6 +118,7 @@ const PaddleGame: React.FC = () => {
       combo: 0,
       comboOpacity: 0,
     };
+    gameStartTimeRef.current = null;
     if (typeof document !== 'undefined' && document.documentElement.requestFullscreen) {
       document.documentElement.requestFullscreen().catch(() => {
         // Fullscreen request failed, continue without Fullscreen
@@ -187,7 +189,7 @@ const PaddleGame: React.FC = () => {
   const calculatePoints = (distance: number, radius: number) => {
     const accuracy = 1 - distance / radius;
 
-    if (accuracy > 0.95) {
+    if (accuracy > 0.90) {
       return { points: 100, feedback: 'PERFECT' };
     }
 
@@ -595,11 +597,13 @@ const PaddleGame: React.FC = () => {
         return;
       }
 
-      // Actual game loop when countdown is done
-      const startTime = Date.now();
+      // Actual game loop when countdown is done - initialize startTime once
+      if (!gameStartTimeRef.current) {
+        gameStartTimeRef.current = Date.now();
+      }
 
       const gameLoop = () => {
-        const elapsed = (Date.now() - startTime) / 1000;
+        const elapsed = (Date.now() - gameStartTimeRef.current!) / 1000;
         gameRef.current.timeLeft = Math.max(0, 60 - elapsed);
 
         // Move targets for hard difficulty
